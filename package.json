@@ -1,0 +1,36 @@
+{
+  "name": "web2pdf",
+  "version": "1.0.0",
+  "description": "",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npx tsc"
+  },
+  "dependencies": {
+    "canvas-wasm": "link:/Users/yanbo.wu/Documents/projects/canvas-wasm",
+    "html2canvas": "link:/Users/yanbo.wu/Documents/projects/html2canvas",
+    "pdf-lib": "^1.17.1",
+    "typescript": "^4.7.4"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^17.0.2",
+    "@commitlint/config-conventional": "^17.0.2",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-airbnb": "^19.0.0",
+    "eslint-config-prettier": "^8.0.0",
+    "eslint-import-resolver-typescript": "^2.7.1",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jsx-a11y": "^6.2.1",
+    "eslint-plugin-prettier": "^4.0.0",
+    "eslint-plugin-react": "^7.28.0",
+    "husky": "^8.0.1",
+    "lint-staged": "^13.2.3",
+    "prettier": "^2.7.1"
+  },
+  "author": "",
+  "license": "ISC"
+}
