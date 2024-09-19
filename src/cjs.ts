@@ -2,6 +2,8 @@ import * as canvasWasm from 'canvas-wasm/dist/module/cjs';
 import { process } from './worker';
 import { Options, normalizeOptions } from './options';
 
+export { downloadBlob } from './utils';
+export { merge } from './merger';
 export { PageFormats } from './pagebreak';
 export { collectStyleSheetFonts } from './fonts';
 
@@ -12,7 +14,7 @@ export { collectStyleSheetFonts } from './fonts';
 // 2. 强行分割
 // 对于长段文字如何合理分割文本，而不会出现文本被截断？
 //
-export async function web2pdf(el: HTMLElement, options?: Options): Promise<Uint8Array[]> {
+export async function web2pdf(el: HTMLElement, options?: Options): Promise<Uint8Array> {
   return process({
     el,
     init(e) {

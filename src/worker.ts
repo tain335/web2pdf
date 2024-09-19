@@ -120,6 +120,7 @@ async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPa
   window.CANVAS_WASM_RENDERER_CONTEXT = 'html2canvas';
   ctx.translate(0, 0);
   ctx.scale(result.meta.scale, result.meta.scale);
+  console.info('[web2pdf] drawPage start');
   await html2canvas(context.el, {
     canvas: context.canvas as unknown as HTMLCanvasElement,
     scale: 1,
@@ -127,10 +128,12 @@ async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPa
     useCORS: true,
     allowTaint: true,
     waitForFonts: false,
-    ignoreElements(element) {
+    waitForLoaded: false,
+    ignoreElements(element: any) {
       return context.ignoreElements?.includes(element) ?? false;
     },
   });
+  console.info('[web2pdf] drawPage end');
   for (let i = 0; i < result.pages.length; i++) {
     const page = result.pages[i];
     // 因为canvas内容已经被缩放
@@ -156,14 +159,13 @@ async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPa
 }
 
 async function mergePages(context: PipelineContext<WorkerContext>, pdfData: Uint8Array[]) {
-  return merge([{ title: '', pages: pdfData }]).then((data) => [data]);
+  return merge([{ title: '', pages: pdfData }]).then((data) => data);
 }
 
-async function downloadAndOutput(context: PipelineContext<WorkerContext>, pdfData: Uint8Array[]) {
+async function downloadAndOutput(context: PipelineContext<WorkerContext>, pdfData: Uint8Array) {
   if (context.autoDownload) {
-    pdfData.forEach((data, index) => {
-      downloadBlob(data, `${context.fileName ?? 'web2pdf'}_${index + 1}.pdf`, 'application/octet-stream');
-    });
+    // eslint-disable-next-line no-bitwise
+    downloadBlob(pdfData, `${context.fileName ?? 'web2pdf'}_${~~(Date.now() / 1000)}.pdf`, 'application/octet-stream');
   }
   return pdfData;
 }
@@ -174,7 +176,7 @@ async function clear(context: PipelineContext<WorkerContext>) {
   }
 }
 
-export async function process(options: WorkerContext): Promise<Uint8Array[]> {
+export async function process(options: WorkerContext): Promise<Uint8Array> {
   const pipeline = new Pipeline(options);
 
   const data = await pipeline
@@ -183,9 +185,9 @@ export async function process(options: WorkerContext): Promise<Uint8Array[]> {
     .pipe(loadFonts)
     .pipe<unknown, SplitPagesResult>(splitPages)
     .pipe<SplitPagesResult, Uint8Array[]>(drawPage)
-    .pipe<Uint8Array[], Uint8Array[]>(mergePages)
+    .pipe<Uint8Array[], Uint8Array>(mergePages)
     .pipe(downloadAndOutput)
     .finally(clear)
     .exec();
-  return data as Promise<Uint8Array[]>;
+  return data as Promise<Uint8Array>;
 }

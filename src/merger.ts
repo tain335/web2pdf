@@ -12,7 +12,7 @@ import {
   rgb,
 } from 'pdf-lib';
 
-export type MergeUnit = {
+type MergeUnit = {
   title: string;
   pages: Uint8Array[];
 };

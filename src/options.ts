@@ -27,8 +27,8 @@ export function normalizeOptions(options?: Options) {
     }
   }
   let pageBreak: PageBreakOptions = {
-    avoidBreakBlockElements: ['img', 'canvas', 'picture'],
-    avoidBreakTextElements: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    avoidBreakBlockElements: ['img', 'canvas', 'picture', 'table', 'svg'],
+    avoidBreakTextElements: ['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
     avoidBreakStyle: true,
   };
   if (options?.pageBreak) {

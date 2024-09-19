@@ -63,11 +63,17 @@ function isOverlap(x1: number, y1: number, x2: number, y2: number) {
   return Math.max(x1, x2) <= Math.min(y1, y2);
 }
 
-function computeLineBoxs(el: Element) {
+function computeLineBoxs(el: Element, excludeElements: string[]) {
   const range = document.createRange();
-  // 将 Range 范围设定为整个元素的内容
-  range.selectNodeContents(el);
-  // 使用 getClientRects() 获取所有行的矩形框
+  if (!excludeElements.length) {
+    range.selectNodeContents(el);
+  } else {
+    el.childNodes.forEach((node) => {
+      if (!excludeElements.includes(node.nodeName.toLowerCase())) {
+        range.selectNode(node);
+      }
+    });
+  }
   const rects = range.getClientRects();
   return rects;
 }
@@ -82,15 +88,17 @@ export function splitPages(context: PipelineContext<WorkerContext>): Promise<Spl
   const containerRect = context.el.getBoundingClientRect();
   let breakPoints: number[] = [];
   let avoidRegions: [number, number][] = [];
-  const joinAvoidRegion = (start: number, end: number) => {
+  const joinAvoidRegion = function joinAvoidRegion(start: number, end: number) {
+    if (end > sourceHeight || start > sourceHeight) {
+      return;
+    }
     const before: [number, number][] = [];
     const overlap: [number, number][] = [[start, end]];
     const after: [number, number][] = [];
     avoidRegions.forEach((region) => {
       // 重叠
       if (isOverlap(start, end, region[0], region[1])) {
-        region[0] = Math.min(start, region[0]);
-        region[1] = Math.max(end, region[0]);
+        overlap.push(region);
       } else if (region[1] < start) {
         before.push(region);
       } else {
@@ -117,12 +125,14 @@ export function splitPages(context: PipelineContext<WorkerContext>): Promise<Spl
       }
     }
     if (context.pageBreak.avoidBreakBlockElements?.includes(el.tagName.toLowerCase())) {
-      const img = el as HTMLImageElement;
-      if (img.complete) {
+      const block = el as HTMLImageElement;
+      if (el.tagName.toLowerCase() === 'img' && block.complete) {
+        joinAvoidRegion(rect.top - containerRect.top, rect.bottom - containerRect.top);
+      } else {
         joinAvoidRegion(rect.top - containerRect.top, rect.bottom - containerRect.top);
       }
     } else if (context.pageBreak.avoidBreakTextElements?.includes(el.tagName.toLocaleLowerCase())) {
-      const lineBoxs = computeLineBoxs(el);
+      const lineBoxs = computeLineBoxs(el, context.pageBreak.avoidBreakBlockElements ?? []);
       Array.from(lineBoxs).forEach((lineBox) => {
         joinAvoidRegion(lineBox.top - containerRect.top, lineBox.bottom - containerRect.top);
       });
@@ -162,7 +172,6 @@ export function splitPages(context: PipelineContext<WorkerContext>): Promise<Spl
       return false;
     });
   });
-
   let offset = 0;
   let pages: PageBounds[] = [];
   while (offset < sourceHeight) {

@@ -2,6 +2,8 @@ import * as canvasWasm from 'canvas-wasm';
 import { process } from './worker';
 import { Options, normalizeOptions } from './options';
 
+export { merge } from './merger';
+export { downloadBlob } from './utils';
 export { PageFormats } from './pagebreak';
 export { collectStyleSheetFonts } from './fonts';
 // computePageSize > splitPage > drawPage > mergePages > output
@@ -10,7 +12,7 @@ export { collectStyleSheetFonts } from './fonts';
 // 1. 缩放图片
 // 2. 强行分割
 // 对于长段文字如何合理分割文本，而不会出现文本被截断？
-export async function web2pdf(el: HTMLElement, options?: Options): Promise<Uint8Array[]> {
+export async function web2pdf(el: HTMLElement, options?: Options): Promise<Uint8Array> {
   return process({
     el,
     canvas: null as unknown as canvasWasm.CanvasWasm,
