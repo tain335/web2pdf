@@ -1,10 +1,12 @@
-export type PageSizeResult = {
+export type PageSizedResult = {
   targetWidth: number;
   targetHeight: number;
   sourceWidth: number;
   sourceHeight: number;
   splitPageHeight: number;
   scale: number;
+  removeIgnoreElements: () => void;
+  restoreIgnoreElements: () => void;
 };
 
 export interface PageBounds {
@@ -12,6 +14,6 @@ export interface PageBounds {
 }
 
 export interface SplitPagesResult {
-  meta: PageSizeResult;
+  meta: PageSizedResult;
   pages: PageBounds[];
 }

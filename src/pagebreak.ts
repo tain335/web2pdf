@@ -80,14 +80,15 @@ function computeLineBoxs(el: Element, excludeElements: string[]) {
 
 export function splitPages(context: PipelineContext<WorkerContext>): Promise<SplitPagesResult> {
   context.notifier.notify('splitPages', 0);
-  const pageHeight = context.finalPageSize.splitPageHeight;
-  const sourceHeight = context.el.clientHeight;
+  const pageHeight = context.finalPageSized.splitPageHeight;
+  const sourceHeight = context.finalPageSized.sourceHeight;
   const els = Array.from(context.el.querySelectorAll('*'));
   const breakOpt = ['always', 'page'];
   const avoidOpt = ['avoid', 'avoid-page'];
   const containerRect = context.el.getBoundingClientRect();
   let breakPoints: number[] = [];
   let avoidRegions: [number, number][] = [];
+  context.finalPageSized.removeIgnoreElements();
   const joinAvoidRegion = function joinAvoidRegion(start: number, end: number) {
     if (end > sourceHeight || start > sourceHeight) {
       return;
@@ -227,8 +228,9 @@ export function splitPages(context: PipelineContext<WorkerContext>): Promise<Spl
     return page.height !== 0;
   });
   context.notifier.notify('splitPages', 100);
+  context.finalPageSized.restoreIgnoreElements();
   return Promise.resolve({
-    meta: context.finalPageSize,
+    meta: context.finalPageSized,
     pages,
   });
 }

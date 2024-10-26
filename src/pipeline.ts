@@ -91,6 +91,7 @@ export class Pipeline<T> {
       }
     } catch (err) {
       finallyHandler(err as unknown as Error);
+      console.error('[web2pdf] err:', err);
       throw err;
     }
     finallyHandler();

@@ -2,7 +2,7 @@ import * as canvasWasm from 'canvas-wasm';
 import html2canvas from 'html2canvas';
 import { PageBreakOptions, PageFomat, computePageDimensions, splitPages } from './pagebreak';
 import { Pipeline, PipelineContext } from './pipeline';
-import { PageSizeResult, SplitPagesResult } from './types';
+import { PageSizedResult, SplitPagesResult } from './types';
 import { downloadBlob } from './utils';
 import { merge } from './merger';
 
@@ -16,7 +16,7 @@ export type WorkerContext = {
   el: HTMLElement;
   canvas: canvasWasm.CanvasWasm;
   init: (el: HTMLCanvasElement | OffscreenCanvas) => Promise<canvasWasm.CanvasWasm>;
-  finalPageSize: PageSizeResult;
+  finalPageSized: PageSizedResult;
   defaultFonts?: (string | Uint8Array)[];
   fonts?: Record<string, (string | Uint8Array)[]>;
   autoDownload?: boolean;
@@ -36,8 +36,8 @@ async function initCanvas(context: PipelineContext<WorkerContext>) {
   context.notifier.notify('initCanvas');
   if (context.perferBinding === 'offscreen_canvas') {
     const canvas = new OffscreenCanvas(
-      context.finalPageSize.sourceWidth * context.finalPageSize.scale,
-      context.finalPageSize.sourceHeight * context.finalPageSize.scale,
+      context.finalPageSized.sourceWidth * context.finalPageSized.scale,
+      context.finalPageSized.sourceHeight * context.finalPageSized.scale,
     );
     context.canvas = await context.init(canvas);
   } else {
@@ -45,8 +45,8 @@ async function initCanvas(context: PipelineContext<WorkerContext>) {
     // @ts-ignore
     canvasEl.style = 'position: fixed; z-index: -1; opactiy: 0; pointer-events: none';
     document.body.appendChild(canvasEl);
-    canvasEl.width = context.finalPageSize.sourceWidth * context.finalPageSize.scale;
-    canvasEl.height = context.finalPageSize.sourceHeight * context.finalPageSize.scale;
+    canvasEl.width = context.finalPageSized.sourceWidth * context.finalPageSized.scale;
+    canvasEl.height = context.finalPageSized.sourceHeight * context.finalPageSized.scale;
     context.canvas = await context.init(canvasEl);
     context.canvasEl = canvasEl;
   }
@@ -67,16 +67,20 @@ async function loadFonts(context: PipelineContext<WorkerContext>) {
       });
     }
   };
+
   if (context.defaultFonts) {
     loadFont('', context.defaultFonts);
   }
+
   if (context.fonts) {
-    Object.keys(context.fonts).forEach((alias) => {
-      const sources = context.fonts?.[alias] ?? [];
-      if (sources.length) {
-        loadFont(alias, sources);
-      }
-    });
+    Object.keys(context.fonts)
+      .filter((key) => !key.toLowerCase().includes('emoji')) // 因为渲染emoji会导致draw_picture报错, example: https://univer.ai/zh-CN/blog/post/ot
+      .forEach((alias) => {
+        const sources = context.fonts?.[alias] ?? [];
+        if (sources.length) {
+          loadFont(alias, sources);
+        }
+      });
   }
 
   await Promise.all(ready);
@@ -84,8 +88,39 @@ async function loadFonts(context: PipelineContext<WorkerContext>) {
 
 async function computePageSize(context: PipelineContext<WorkerContext>) {
   context.notifier.notify('computePageSize');
+  let restoreIgnoreElements: () => void = () => {};
+  let removeIgnoreElements: () => void = () => {};
+  if (context.ignoreElements) {
+    removeIgnoreElements = () => {
+      const resetFuncs: (() => void)[] = [];
+      for (const el of context.ignoreElements ?? []) {
+        const next = el.nextSibling;
+        const parentNode = el.parentNode;
+        if (parentNode) {
+          parentNode.removeChild(el);
+        }
+        resetFuncs.push(() => {
+          if (next) {
+            parentNode?.insertBefore(next, el);
+          } else {
+            parentNode?.appendChild(el);
+          }
+        });
+      }
+      restoreIgnoreElements = () => {
+        while (resetFuncs.length) {
+          const func = resetFuncs.pop();
+          if (func) {
+            func();
+          }
+        }
+      };
+    };
+  }
+  removeIgnoreElements();
   const sourceWidth = context.el.clientWidth;
   const sourceHeight = context.el.clientHeight;
+  restoreIgnoreElements();
   let scale = 1;
   let targetWidth = 0;
   let targetHeight = 0;
@@ -107,7 +142,17 @@ async function computePageSize(context: PipelineContext<WorkerContext>) {
     targetWidth = context.pageWidth;
     targetHeight = context.pageHeight;
   }
-  context.finalPageSize = { targetHeight, targetWidth, scale, sourceWidth, sourceHeight, splitPageHeight };
+  context.finalPageSized = {
+    targetHeight,
+    targetWidth,
+    scale,
+    sourceWidth,
+    sourceHeight,
+    splitPageHeight,
+    removeIgnoreElements,
+    restoreIgnoreElements,
+  };
+  console.log('finalPageSize', context.finalPageSized);
 }
 
 async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPagesResult) {
@@ -134,6 +179,7 @@ async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPa
     },
   });
   console.info('[web2pdf] drawPage end');
+  console.info('[web2pdf] savePage start');
   for (let i = 0; i < result.pages.length; i++) {
     const page = result.pages[i];
     // 因为canvas内容已经被缩放
@@ -155,6 +201,7 @@ async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPa
     pdfData.push(data);
     offset += sourceHeight;
   }
+  console.info('[web2pdf] savePage end');
   return pdfData;
 }
 

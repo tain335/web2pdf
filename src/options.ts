@@ -1,5 +1,5 @@
 import { PageBreakOptions, PageFomat } from './pagebreak';
-import { PageSizeResult } from './types';
+import { PageSizedResult } from './types';
 
 export interface Options {
   defaultFonts?: (string | Uint8Array)[];
@@ -38,7 +38,7 @@ export function normalizeOptions(options?: Options) {
     margin,
     pageBreak,
     autoDownload: options?.autoDownload ?? false,
-    finalPageSize: null as unknown as PageSizeResult,
+    finalPageSized: null as unknown as PageSizedResult,
     defaultFonts: options?.defaultFonts,
     fonts: options?.fonts,
     fileName: options?.fileName,

@@ -1,16 +1,4 @@
-import {
-  PDFArray,
-  PDFDict,
-  PDFDocument,
-  PDFHexString,
-  PDFName,
-  PDFNull,
-  PDFNumber,
-  PDFObject,
-  PDFPage,
-  PDFRef,
-  rgb,
-} from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNull, PDFNumber, PDFPage, PDFRef, PDFString, rgb } from 'pdf-lib';
 
 type MergeUnit = {
   title: string;
@@ -31,29 +19,6 @@ function parseColor(color: string) {
   throw new Error('unsupport color length');
 }
 
-function createOutlineItem(
-  doc: PDFDocument,
-  title: string,
-  parent: PDFObject,
-  nextOrPrev: PDFRef,
-  page: PDFRef,
-  isLast = false,
-) {
-  const array = PDFArray.withContext(doc.context);
-  array.push(page);
-  array.push(PDFName.of('XYZ'));
-  array.push(PDFNull);
-  array.push(PDFNull);
-  array.push(PDFNull);
-  const map = new Map();
-  map.set(PDFName.Title, PDFHexString.fromText(title));
-  map.set(PDFName.Parent, parent);
-  map.set(PDFName.of(isLast ? 'Prev' : 'Next'), nextOrPrev);
-  map.set(PDFName.of('Dest'), array);
-
-  return PDFDict.fromMapWithContext(map, doc.context);
-}
-
 type MergeOptions = {
   emitPageNums?: boolean;
   pageNumFontSize?: number;
@@ -63,32 +28,56 @@ type MergeOptions = {
   // pageNumPosY?: number;
 };
 
+const createOutlineItem = (
+  pdfDoc: PDFDocument,
+  title: string,
+  parent: PDFRef,
+  nextOrPrev: PDFRef,
+  page: PDFRef,
+  isLast = false,
+) => {
+  const array = PDFArray.withContext(pdfDoc.context);
+  array.push(page);
+  array.push(PDFName.of('XYZ'));
+  array.push(PDFNull);
+  array.push(PDFNull);
+  array.push(PDFNull);
+  const map = new Map();
+  map.set(PDFName.Title, PDFString.of(title));
+  map.set(PDFName.Parent, parent);
+  map.set(PDFName.of(isLast ? 'Prev' : 'Next'), nextOrPrev);
+  map.set(PDFName.of('Dest'), array);
+
+  return PDFDict.fromMapWithContext(map, pdfDoc.context);
+};
+
 export async function merge(units: MergeUnit[], opts?: MergeOptions) {
   const mergeOpts = { emitPageNums: false, pageNumFontSize: 14, pageNumsColor: '#fff', emitOutline: false, ...opts };
-  const doc = await PDFDocument.create();
-  doc.setCreator('web2pdf');
-  doc.setAuthor('web2pdf');
+  const mergedDoc = await PDFDocument.create();
   const titleMap = new Map<number, string>();
   const refs: PDFRef[] = [];
+  mergedDoc.setCreator('web2pdf');
+  mergedDoc.setAuthor('web2pdf');
+  console.info('[web2pdf] merge start');
   for (const unit of units) {
     let firstPage: PDFPage | null = null;
     for (const page of unit.pages) {
       const ext = await PDFDocument.load(page);
-      const pages = await doc.copyPages(ext, ext.getPageIndices());
+      const pages = await mergedDoc.copyPages(ext, ext.getPageIndices());
       if (pages.length && !firstPage) {
         firstPage = pages[0];
       }
       for (const p of pages) {
         const { width } = p.getSize();
         if (mergeOpts.emitPageNums) {
-          p.drawText(`${doc.getPageCount() + 1}`, {
+          p.drawText(`${mergedDoc.getPageCount() + 1}`, {
             size: mergeOpts.pageNumFontSize,
             color: parseColor(mergeOpts.pageNumsColor),
             x: (width * 11) / 12,
             y: (width * 1) / 24,
           });
         }
-        doc.addPage(p);
+        mergedDoc.addPage(p);
       }
     }
     if (firstPage) {
@@ -96,15 +85,17 @@ export async function merge(units: MergeUnit[], opts?: MergeOptions) {
       refs.push(firstPage.ref);
     }
   }
-  if (mergeOpts.emitOutline) {
-    const outlinesDictRef = doc.context.nextRef();
+
+  if (units.length > 1 && mergeOpts.emitOutline) {
+    console.info('[web2pdf] emitOutline start');
+    const outlinesDictRef = mergedDoc.context.nextRef();
     const outlinesDistMap = new Map();
     outlinesDistMap.set(PDFName.Type, PDFName.of('Outlines'));
     let nextRef: PDFRef;
     let prevRef: PDFRef;
     refs.forEach((ref, index) => {
-      const outlineRef = nextRef ?? doc.context.nextRef();
-      nextRef = doc.context.nextRef();
+      const outlineRef = nextRef ?? mergedDoc.context.nextRef();
+      nextRef = mergedDoc.context.nextRef();
       const isLast = index === refs.length - 1;
 
       if (index === 0) {
@@ -116,19 +107,21 @@ export async function merge(units: MergeUnit[], opts?: MergeOptions) {
       }
 
       const outlineItem = createOutlineItem(
-        doc,
+        mergedDoc,
         titleMap.get(ref.objectNumber) ?? '',
         outlinesDictRef,
         isLast ? prevRef : nextRef,
         ref,
         isLast,
       );
-      doc.context.assign(outlineRef, outlineItem);
+      mergedDoc.context.assign(outlineRef, outlineItem);
       prevRef = outlineRef;
     });
-    doc.catalog.set(PDFName.of('Outlines'), outlinesDictRef);
-    const outlineDict = PDFDict.fromMapWithContext(outlinesDistMap, doc.context);
-    doc.context.assign(outlinesDictRef, outlineDict);
+    mergedDoc.catalog.set(PDFName.of('Outlines'), outlinesDictRef);
+    const outlineDict = PDFDict.fromMapWithContext(outlinesDistMap, mergedDoc.context);
+    mergedDoc.context.assign(outlinesDictRef, outlineDict);
+    console.info('[web2pdf] emitOutline end');
   }
-  return doc.save();
+  console.info('[web2pdf] merge end');
+  return mergedDoc.save();
 }
