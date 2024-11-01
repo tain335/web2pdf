@@ -26,12 +26,41 @@ async function loadCSSCors(uri: string): Promise<string> {
   });
 }
 
+async function fetchFontData(uri: string): Promise<Uint8Array> {
+  let hasCred = false;
+  try {
+    hasCred = XMLHttpRequest && 'withCredentials' in new XMLHttpRequest();
+  } catch (e) {
+    // no work
+  }
+  if (!hasCred) {
+    throw new Error('CORS not supported');
+  }
+  const xhr = new XMLHttpRequest();
+  xhr.responseType = 'arraybuffer';
+  return new Promise((resolve, reject) => {
+    xhr.open('GET', uri);
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`fail load ${uri}`));
+      } else {
+        resolve(new Uint8Array(xhr.response));
+      }
+    };
+    xhr.onerror = (err) => {
+      reject(err);
+    };
+    xhr.send();
+  });
+}
+
 export async function collectStyleSheetFonts(doc?: Document, options?: { ignoreCorsError?: boolean }) {
   const document = doc ?? window.document;
   // 获取所有的样式表
   const styleSheets = document.styleSheets;
   const corsStyleSheet: CSSStyleSheet[] = [];
-  const fonts: { [key: string]: string[] } = {};
+  const fontsWithURL: { [key: string]: string[] } = {};
+  const fontsWithData: { [key: string]: Uint8Array[] } = {};
   const processStyleSheet = (styleSheet: CSSStyleSheet) => {
     const rules = styleSheet.cssRules || styleSheet.rules;
     // 遍历样式表中的规则
@@ -40,18 +69,18 @@ export async function collectStyleSheetFonts(doc?: Document, options?: { ignoreC
       // 检查是否为 @font-face 规则
       if (rule.type === CSSRule.FONT_FACE_RULE) {
         // 提取 @font-face 规则中的信息
-        const fontFamily = rule.style.getPropertyValue('font-family');
+        const fontFamily = rule.style.getPropertyValue('font-family').replaceAll('"', '').replace("'", '');
         const src = rule.style.getPropertyValue('src');
-        const match = /url\("(.+)"\)/.exec(src);
+        const match = /url\("(.+?)"\)/.exec(src);
         if (match) {
           let url = match[1];
           if (/^(\.|\/)/.test(url)) {
             url = new URL(url, styleSheet.href ?? window.location.href).toString();
           }
-          if (!fonts[fontFamily]) {
-            fonts[fontFamily] = [];
+          if (!fontsWithURL[fontFamily]) {
+            fontsWithURL[fontFamily] = [];
           }
-          fonts[fontFamily].push(url);
+          fontsWithURL[fontFamily].push(url);
         }
       }
     }
@@ -98,6 +127,18 @@ export async function collectStyleSheetFonts(doc?: Document, options?: { ignoreC
         }),
     );
   }
-  await Promise.all(pendings);
-  return fonts;
+
+  await Promise.allSettled(pendings);
+
+  await Promise.allSettled(
+    Object.keys(fontsWithURL).map((key) => {
+      return Promise.allSettled(fontsWithURL[key].map((url) => fetchFontData(url))).then((data) => {
+        fontsWithData[key] = Array.from(data.values())
+          .filter((val) => val.status === 'fulfilled')
+          .map((val) => (val as PromiseFulfilledResult<Uint8Array>).value);
+      });
+    }),
+  );
+
+  return fontsWithData;
 }

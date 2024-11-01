@@ -152,7 +152,6 @@ async function computePageSize(context: PipelineContext<WorkerContext>) {
     removeIgnoreElements,
     restoreIgnoreElements,
   };
-  console.log('finalPageSize', context.finalPageSized);
 }
 
 async function drawPage(context: PipelineContext<WorkerContext>, result: SplitPagesResult) {
